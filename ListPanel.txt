@@ -1,0 +1,462 @@
+package com.thella.kcobain
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.layout.AnimatedPane
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material3.VerticalDragHandle
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.compose.material3.adaptive.layout.PaneExpansionAnchor
+import androidx.compose.material3.adaptive.layout.PaneExpansionState
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldDestinationItem
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldPaneScope
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.rememberPaneExpansionState
+import androidx.compose.runtime.remember
+import androidx.compose.material3.adaptive.navigation.BackNavigationBehavior
+import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
+import androidx.compose.material3.adaptive.navigation.ThreePaneScaffoldNavigator
+import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import com.thella.kcobain.ui.theme.KcobainTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            var isDarkTheme by remember { mutableStateOf(true) }
+
+            KcobainTheme(darkTheme = isDarkTheme) {
+                SideEffect {
+                    enableEdgeToEdge(
+                        statusBarStyle = androidx.activity.SystemBarStyle.auto(
+                            lightScrim = android.graphics.Color.BLACK,
+                            darkScrim = android.graphics.Color.BLACK,
+                        ) { isDarkTheme }
+                    )
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    NavigationSample()
+                }
+            }
+        }
+    }
+}
+
+
+enum class AppDestinations(
+    val label: String,
+    val icon: ImageVector,
+    val contentDescription: String,
+    val role: ThreePaneScaffoldRole
+) {
+    HOME("Home", Icons.Default.Home, "Home",ListDetailPaneScaffoldRole.Detail),
+    FAVORITES("Fav", Icons.Default.Favorite, "Fav",ListDetailPaneScaffoldRole.Detail),
+    SHOPPING("Shopping", Icons.Default.ShoppingCart, "Shopping", ListDetailPaneScaffoldRole.Detail),
+    PROFILE("Profile", Icons.Default.AccountBox, "Profile",ListDetailPaneScaffoldRole.Detail),
+    EXTRA("Extra", Icons.Default.AccountBox, "Profile",ListDetailPaneScaffoldRole.Extra),
+}
+
+
+// Pane expansion anchors for drag functionality
+private val PaneExpansionAnchors = listOf(
+    PaneExpansionAnchor.Proportion(0.3f),
+    PaneExpansionAnchor.Proportion(0.5f),
+    PaneExpansionAnchor.Proportion(0.7f),
+)
+
+
+@Composable
+fun PaneExpansionDragHandleSample(
+    state: PaneExpansionState
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    VerticalDragHandle(
+        modifier = Modifier,
+        interactionSource = interactionSource,
+    )
+}
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun NavigationSample(){
+
+    val scaffoldNavigator = rememberListDetailPaneScaffoldNavigator<AppDestinations>()
+    val scope = rememberCoroutineScope()
+    val backNavigationBehavior = BackNavigationBehavior.PopUntilScaffoldValueChange
+    
+    // Remember the last Detail destination to keep it visible when Extra is active
+    var lastDetailDestination by remember { 
+        mutableStateOf<AppDestinations?>(null) 
+    }
+    
+    // Update lastDetailDestination when a Detail destination is active
+    val currentDestination = scaffoldNavigator.currentDestination?.contentKey
+    if (currentDestination?.role == ListDetailPaneScaffoldRole.Detail) {
+        lastDetailDestination = currentDestination
+    }
+
+    NavigableListDetailPaneScaffold(
+        paneExpansionState =
+            rememberPaneExpansionState(
+                keyProvider = scaffoldNavigator.scaffoldValue,
+                anchors = PaneExpansionAnchors,
+                initialAnchoredIndex = 1,
+            ),
+        paneExpansionDragHandle = { state ->
+            PaneExpansionDragHandleSample(state)
+        },
+        navigator = scaffoldNavigator,
+        listPane = {
+            AnimatedPane {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Text(
+                        text = "Main Pane",
+                        style = MaterialTheme.typography.displayMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                    MyList(
+                        onItemClick = { item ->
+                            // Navigate to the detail pane with the passed item
+                            scope.launch {
+                                scaffoldNavigator.navigateTo(
+                                    item.role,
+                                    item
+                                )
+                            }
+                        },
+                    )
+
+                }
+
+            }
+        },
+        detailPane = {
+            AnimatedPane {
+                // Show detail pane content: current Detail destination, or last Detail destination when Extra is active
+                // This ensures the list pane remains visible on larger screens
+                val detailDestination = currentDestination
+                    ?.takeIf { it.role == ListDetailPaneScaffoldRole.Detail }
+                    ?: lastDetailDestination
+                
+                detailDestination?.let { contentKey ->
+                    Column {
+                        // Allow users to dismiss the detail pane. Use back navigation to
+                        // hide an expanded detail pane.
+                        if (scaffoldNavigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] == PaneAdaptedValue.Expanded) {
+                            // Material design principles promote the usage of a right-aligned
+                            // close (X) button.
+                            IconButton(
+                                modifier =  Modifier.align(Alignment.End).padding(16.dp),
+                                onClick = {
+                                    scope.launch {
+                                        scaffoldNavigator.navigateBack(backNavigationBehavior)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra,
+                                        AppDestinations.EXTRA)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.AccountTree, contentDescription = "Extra")
+                        }
+                        MyDetails(contentKey)
+                    }
+                }
+            }
+        },
+
+        extraPane = {
+            AnimatedPane {
+                Column {
+
+                        IconButton(
+                            modifier =  Modifier.align(Alignment.End).padding(16.dp),
+                            onClick = {
+                                scope.launch {
+                                    scaffoldNavigator.navigateBack(backNavigationBehavior)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+
+                    scaffoldNavigator.currentDestination?.contentKey
+                        ?.takeIf { it.role == ListDetailPaneScaffoldRole.Extra }
+                        ?.let { contentKey ->
+                            Extra(contentKey as AppDestinations)
+                        }
+                }
+            }
+        }
+    )
+
+}
+
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun Extra(
+    destinations: AppDestinations
+
+) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = destinations.label,
+                style = MaterialTheme.typography.headlineLarge
+            )
+            Text(
+                text = "Welcome to the Extra Pane",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+        }
+}
+
+@Composable
+fun MyList(onItemClick: (AppDestinations) -> Unit) {
+    val destinations = AppDestinations.entries
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        LazyColumn {
+            items(
+                items = destinations,
+                key = { it.name }
+            ) { destination ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { onItemClick(destination) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = destination.icon,
+                            contentDescription = destination.contentDescription,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.padding(horizontal = 12.dp))
+                        Text(
+                            text = destination.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun MyDetails(destinations: AppDestinations) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = destinations.label,
+            style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Welcome to the Home screen",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+
+@Composable
+fun HomeDestination() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Home",
+            style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Welcome to the Home screen",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun FavoritesDestination() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Favorites",
+            style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Your favorite items will appear here",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun ShoppingDestination() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Shopping",
+            style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Browse and shop for items",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun ProfileDestination() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Profile",
+            style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Manage your profile settings",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+
+
+
+//var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+//NavigationSuiteScaffold(
+//navigationItems = {
+//    AppDestinations.entries.forEach {
+//        NavigationSuiteItem(
+//            icon = {
+//                Icon(
+//                    it.icon,
+//                    contentDescription = (it.contentDescription)
+//                )
+//            },
+//            label = { Text(it.label) },
+//            selected = it == currentDestination,
+//            onClick = { currentDestination = it },
+//        )
+//    }
+//},
+//navigationItemVerticalArrangement = Arrangement.Center
+//) {
+//    // Display content based on current destination
+//    when (currentDestination) {
+//        AppDestinations.HOME -> HomeDestination()
+//        AppDestinations.FAVORITES -> FavoritesDestination()
+//        AppDestinations.SHOPPING -> ShoppingDestination()
+//        AppDestinations.PROFILE -> ProfileDestination()
+//    }
+//}
