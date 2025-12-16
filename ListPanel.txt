@@ -92,17 +92,154 @@ class MainActivity : ComponentActivity() {
 }
 
 
-enum class AppDestinations(
+/**
+ * Data class representing a destination/page with its composable function
+ * This allows registering destinations with their associated composables
+ */
+data class AppDestination @OptIn(ExperimentalMaterial3AdaptiveApi::class) constructor(
+    val id: String,
     val label: String,
     val icon: ImageVector,
     val contentDescription: String,
-    val role: ThreePaneScaffoldRole
+    val role: ThreePaneScaffoldRole,
+    val composable: @Composable (AppDestination, ThreePaneScaffoldNavigator<AppDestination>, CoroutineScope) -> Unit  // Composable function to render the page
 ) {
-    HOME("Home", Icons.Default.Home, "Home",ListDetailPaneScaffoldRole.Detail),
-    FAVORITES("Fav", Icons.Default.Favorite, "Fav",ListDetailPaneScaffoldRole.Detail),
-    SHOPPING("Shopping", Icons.Default.ShoppingCart, "Shopping", ListDetailPaneScaffoldRole.Detail),
-    PROFILE("Profile", Icons.Default.AccountBox, "Profile",ListDetailPaneScaffoldRole.Detail),
-    EXTRA("Extra", Icons.Default.AccountBox, "Profile",ListDetailPaneScaffoldRole.Extra),
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as AppDestination
+        return id == other.id
+    }
+
+    override fun hashCode(): Int {
+        return id.hashCode()
+    }
+}
+
+/**
+ * Registry for all app destinations with their composables
+ * Destinations can be registered dynamically from anywhere in the app
+ */
+object AppDestinationRegistry {
+    // Use mutable list so we can add/remove destinations at runtime
+    private val _destinations = mutableListOf<AppDestination>()
+    
+    // Public read-only access to destinations
+    val destinations: List<AppDestination>
+        get() = _destinations.toList()  // Return a copy to prevent external modification
+    
+    init {
+        // Register default destinations
+        registerDefaultDestinations()
+    }
+    
+    /**
+     * Register default destinations
+     */
+    @OptIn(ExperimentalMaterial3AdaptiveApi::class)
+    private fun registerDefaultDestinations() {
+        _destinations.addAll(
+            listOf(
+                AppDestination(
+                    id = "home",
+                    label = "Home",
+                    icon = Icons.Default.Home,
+                    contentDescription = "Home",
+                    role = ListDetailPaneScaffoldRole.Detail,
+                    composable = { destination, navigator, scope -> HomeDestination(destination, navigator, scope) }
+                ),
+                AppDestination(
+                    id = "favorites",
+                    label = "Fav",
+                    icon = Icons.Default.Favorite,
+                    contentDescription = "Fav",
+                    role = ListDetailPaneScaffoldRole.Detail,
+                    composable = { destination, navigator, scope -> FavoritesDestination(destination, navigator, scope) }
+                ),
+                AppDestination(
+                    id = "shopping",
+                    label = "Shopping",
+                    icon = Icons.Default.ShoppingCart,
+                    contentDescription = "Shopping",
+                    role = ListDetailPaneScaffoldRole.Detail,
+                    composable = { destination, navigator, scope -> ShoppingDestination(destination, navigator, scope) }
+                ),
+                AppDestination(
+                    id = "profile",
+                    label = "Profile",
+                    icon = Icons.Default.AccountBox,
+                    contentDescription = "Profile",
+                    role = ListDetailPaneScaffoldRole.Detail,
+                    composable = { destination, navigator, scope -> ProfileDestination(destination, navigator, scope) }
+                ),
+                AppDestination(
+                    id = "extra",
+                    label = "Extra",
+                    icon = Icons.Default.AccountBox,
+                    contentDescription = "Extra",
+                    role = ListDetailPaneScaffoldRole.Extra,
+                    composable = { destination, navigator, scope -> Extra(destination, navigator, scope) }
+                ),
+            )
+        )
+    }
+    
+    /**
+     * Register a new destination (can be called from anywhere)
+     * @param destination The destination to register
+     * @return true if registered successfully, false if destination with same id already exists
+     */
+    fun register(destination: AppDestination): Boolean {
+        if (_destinations.any { it.id == destination.id }) {
+            return false  // Destination with this id already exists
+        }
+        _destinations.add(destination)
+        return true
+    }
+    
+    /**
+     * Register multiple destinations at once
+     */
+    fun registerAll(destinations: List<AppDestination>) {
+        destinations.forEach { register(it) }
+    }
+    
+    /**
+     * Unregister a destination by id
+     * @param id The id of the destination to remove
+     * @return true if removed, false if not found
+     */
+    fun unregister(id: String): Boolean {
+        return _destinations.removeIf { it.id == id }
+    }
+    
+    /**
+     * Clear all destinations
+     */
+    fun clear() {
+        _destinations.clear()
+    }
+    
+    /**
+     * Check if a destination with given id exists
+     */
+    fun exists(id: String): Boolean {
+        return _destinations.any { it.id == id }
+    }
+    
+    /**
+     * Find destination by id
+     */
+    fun findById(id: String): AppDestination? {
+        return _destinations.firstOrNull { it.id == id }
+    }
+    
+    /**
+     * Get destinations by role
+     */
+    fun getByRole(role: ThreePaneScaffoldRole): List<AppDestination> {
+        return _destinations.filter { it.role == role }
+    }
 }
 
 
@@ -129,13 +266,13 @@ fun PaneExpansionDragHandleSample(
 @Composable
 fun NavigationSample(){
 
-    val scaffoldNavigator = rememberListDetailPaneScaffoldNavigator<AppDestinations>()
+    val scaffoldNavigator = rememberListDetailPaneScaffoldNavigator<AppDestination>()
     val scope = rememberCoroutineScope()
     val backNavigationBehavior = BackNavigationBehavior.PopUntilScaffoldValueChange
     
     // Remember the last Detail destination to keep it visible when Extra is active
     var lastDetailDestination by remember { 
-        mutableStateOf<AppDestinations?>(null) 
+        mutableStateOf<AppDestination?>(null) 
     }
     
     // Update lastDetailDestination when a Detail destination is active
@@ -210,14 +347,21 @@ fun NavigationSample(){
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    scaffoldNavigator.navigateTo(ListDetailPaneScaffoldRole.Extra,
-                                        AppDestinations.EXTRA)
+                                    // Find EXTRA destination from registry
+                                    val extraDestination = AppDestinationRegistry.findById("extra")
+                                    extraDestination?.let {
+                                        scaffoldNavigator.navigateTo(
+                                            ListDetailPaneScaffoldRole.Extra,
+                                            it
+                                        )
+                                    }
                                 }
                             }
                         ) {
                             Icon(Icons.Default.AccountTree, contentDescription = "Extra")
                         }
-                        MyDetails(contentKey)
+                        // Call the composable function registered with this destination
+                        contentKey.composable(contentKey, scaffoldNavigator, scope)
                     }
                 }
             }
@@ -241,7 +385,8 @@ fun NavigationSample(){
                     scaffoldNavigator.currentDestination?.contentKey
                         ?.takeIf { it.role == ListDetailPaneScaffoldRole.Extra }
                         ?.let { contentKey ->
-                            Extra(contentKey as AppDestinations)
+                            // Call the composable function registered with this destination
+                            (contentKey as AppDestination).composable(contentKey, scaffoldNavigator, scope)
                         }
                 }
             }
@@ -254,8 +399,9 @@ fun NavigationSample(){
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun Extra(
-    destinations: AppDestinations
-
+    destination: AppDestination,
+    navigator: ThreePaneScaffoldNavigator<AppDestination>,
+    scope: CoroutineScope
 ) {
         Column(
             modifier = Modifier
@@ -263,7 +409,7 @@ fun Extra(
                 .padding(16.dp)
         ) {
             Text(
-                text = destinations.label,
+                text = destination.label,
                 style = MaterialTheme.typography.headlineLarge
             )
             Text(
@@ -276,8 +422,9 @@ fun Extra(
 }
 
 @Composable
-fun MyList(onItemClick: (AppDestinations) -> Unit) {
-    val destinations = AppDestinations.entries
+fun MyList(onItemClick: (AppDestination) -> Unit) {
+    // Get destinations from configurable registry
+    val destinations = AppDestinationRegistry.destinations
     
     Column(
         modifier = Modifier
@@ -293,7 +440,7 @@ fun MyList(onItemClick: (AppDestinations) -> Unit) {
         LazyColumn {
             items(
                 items = destinations,
-                key = { it.name }
+                key = { it.id }  // Use id instead of name
             ) { destination ->
                 Card(
                     modifier = Modifier
@@ -334,15 +481,20 @@ fun MyList(onItemClick: (AppDestinations) -> Unit) {
 }
 
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun MyDetails(destinations: AppDestinations) {
+fun HomeDestination(
+    destination: AppDestination,
+    navigator: ThreePaneScaffoldNavigator<AppDestination>,
+    scope: CoroutineScope
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text(
-            text = destinations.label,
+            text = destination.label,
             style = MaterialTheme.typography.headlineLarge
         )
         Text(
@@ -350,31 +502,42 @@ fun MyDetails(destinations: AppDestinations) {
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = 8.dp)
         )
+        
+        Spacer(modifier = Modifier.padding(16.dp))
+        
+        // Button to navigate to Extra page
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                scope.launch {
+                    // Find EXTRA destination from registry
+                    val extraDestination = AppDestinationRegistry.findById("extra")
+                    extraDestination?.let {
+                        navigator.navigateTo(
+                            ListDetailPaneScaffoldRole.Extra,
+                            it
+                        )
+                    }
+                }
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountTree,
+                contentDescription = "Extra",
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text("Go to Extra Page")
+        }
     }
 }
 
-
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun HomeDestination() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Home",
-            style = MaterialTheme.typography.headlineLarge
-        )
-        Text(
-            text = "Welcome to the Home screen",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
-}
-
-@Composable
-fun FavoritesDestination() {
+fun FavoritesDestination(
+    destination: AppDestination,
+    navigator: ThreePaneScaffoldNavigator<AppDestination>,
+    scope: CoroutineScope
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -392,8 +555,13 @@ fun FavoritesDestination() {
     }
 }
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun ShoppingDestination() {
+fun ShoppingDestination(
+    destination: AppDestination,
+    navigator: ThreePaneScaffoldNavigator<AppDestination>,
+    scope: CoroutineScope
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -411,8 +579,13 @@ fun ShoppingDestination() {
     }
 }
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun ProfileDestination() {
+fun ProfileDestination(
+    destination: AppDestination,
+    navigator: ThreePaneScaffoldNavigator<AppDestination>,
+    scope: CoroutineScope
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -429,6 +602,7 @@ fun ProfileDestination() {
         )
     }
 }
+
 
 
 
@@ -460,3 +634,4 @@ fun ProfileDestination() {
 //        AppDestinations.PROFILE -> ProfileDestination()
 //    }
 //}
+
